@@ -75,12 +75,15 @@ export function cellAt(world, col, row) {
 export function isWaterTile(cell) {
   return cell && ['canal', 'pump', 'tower', 'sluice', 'spillway'].includes(cell.kind);
 }
-export function addFloater(world, col, row, text, color) {
-  // Stagger simultaneous +N popups across three lanes so they never stack.
-  const lane = world.floaters.length % 3;
+export function addFloater(world, col, row, text, color, dy) {
+  // One dedicated lane per town column, 34px apart vertically, anchored over
+  // that town's own column — the three feed popups can never share a band.
+  // (Other popups fall back to a spawn-order lane.)
+  const laneByCol = { 1: 0, 4: 1, 7: 2 };
+  const lane = laneByCol[col] !== undefined ? laneByCol[col] : world.floaters.length % 3;
   const baseX = GRID.x + col * (GRID.cell + GRID.gap) + 36;
   const baseY = GRID.y + row * (GRID.cell + GRID.gap) + 20;
-  world.floaters.push({ x: baseX + (lane - 1) * 52, y: baseY - lane * 22, text, color: color || '#ffd166', life: 1.2 });
+  world.floaters.push({ x: baseX, y: baseY - lane * 34 + (dy || 0), text, color: color || '#ffd166', life: 1.2 });
 }
 export function addScore(world, points, col, row) {
   const gained = points * world.combo;
@@ -231,7 +234,8 @@ function damageBoss(world, amount, col) {
   if (phase !== world.bossPhase) {
     world.bossPhase = phase;
     world.log.unshift(`The Delugewyrm reels — ${BOSS.phases[phase]}.`);
-    addFloater(world, col, GRID.rows - 1, `BOSS -${amount}`, '#ff6b6b');
+    // Two lanes above that town's feed popup, so the two pills never share a band.
+    addFloater(world, col, GRID.rows - 1, `BOSS -${amount}`, '#ff6b6b', -68);
   }
 }
 function endWave(world) {

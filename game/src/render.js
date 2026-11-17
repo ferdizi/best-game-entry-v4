@@ -36,11 +36,18 @@ function sky(ctx, world) {
   g.addColorStop(1, '#0f1526');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, VIEW.width, VIEW.height);
-  // Dusk sun + stars.
+  // Dusk sun: smaller disc with a rim and a few soft craters, not a flat blob.
   ctx.fillStyle = '#ffb454';
-  ctx.beginPath(); ctx.arc(1120, 84, 34, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(1120, 84, 30, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = 'rgba(255,180,84,0.25)';
-  ctx.beginPath(); ctx.arc(1120, 84, 58, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(1120, 84, 46, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(1120, 84, 22, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = 'rgba(200,120,40,0.45)';
+  ctx.beginPath(); ctx.arc(1110, 76, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(1130, 92, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(1124, 70, 3, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = 'rgba(244,234,216,0.7)';
   for (let i = 0; i < 40; i += 1) {
     const x = (i * 173) % 1280; const y = (i * 61) % 110;
@@ -305,11 +312,20 @@ function drawBuildBar(ctx, world) {
 }
 function drawFloaters(ctx, world) {
   for (const f of world.floaters) {
-    ctx.globalAlpha = Math.min(1, f.life);
-    const fy = f.y - (1.2 - f.life) * 30;
+    // Solid pill behind the text, so a popup reads over any tile or label
+    // beneath it; it never fades below 85% until it pops out at life 0.
+    const alpha = Math.min(1, Math.max(0.85, f.life));
+    const fy = f.y - (1.2 - f.life) * 12;
+    ctx.globalAlpha = alpha;
     ctx.font = '900 15px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    const w = ctx.measureText(f.text).width;
+    ctx.fillStyle = 'rgba(10,14,30,0.92)';
+    roundRect(ctx, f.x - w / 2 - 9, fy - 12, w + 18, 24, 12); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,209,102,0.55)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
     ctx.strokeStyle = 'rgba(10,14,30,0.9)';
     ctx.lineWidth = 4;
     ctx.strokeText(f.text, f.x, fy);
