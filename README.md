@@ -1,3 +1,9 @@
+[![make.fun](https://make.fun/badge/best-game-01.svg)](https://make.fun/bounty/best-game-01)
+[![rank](https://make.fun/badge/best-game-01/ferdizi/best-game-entry-v4/rank.svg)](https://make.fun/bounty/best-game-01)
+[![reward](https://make.fun/badge/best-game-01/ferdizi/best-game-entry-v4/reward.svg)](https://make.fun/bounty/best-game-01)
+
+An entry for [make.fun best-game-01](https://make.fun/bounty/best-game-01) — referral code qgr0hfw9.
+
 # FLOODWARDEN — Hold the Three Valleys
 
 Route the flood. Feed the towns. Turn back the Delugewyrm.
