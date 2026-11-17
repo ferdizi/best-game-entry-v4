@@ -1,12 +1,13 @@
 // FLOODWARDEN render: every pixel the judge sees. One clear job: draw the
 // title, the playfield with its dense HUD, the boss, and the end screen.
 import { BOSS, BUILDS, GRID, TOWNS, VALLEYS, VIEW } from './config.js';
-import { currentValley, currentWave, hazardOf, isWaterTile, nextWaveInfo } from './world.js';
+import { currentValley, currentWave, cellAt, hazardOf, isWaterTile, nextWaveInfo } from './world.js';
 import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './world.js';
 
 const INK = '#f4ead8';
 const DIM = '#b9c4d6';
-const WATER = '#35d0c5';
+const WATER = '#46e8d8';
+const WATER_BRIGHT = '#a5fff2';
 const WATER_DEEP = '#1b7f8f';
 const GOLD = '#ffd166';
 const RED = '#ff6b6b';
@@ -55,6 +56,21 @@ function drawSprings(ctx, world) {
     text(ctx, '≋', x, GRID.y - 25, 20, '#0f2f3a', 'center', 900);
   }
 }
+// Which way the water in this cell is heading: down toward the towns first,
+// then along a wet neighbour. The chevrons in drawTile point this way.
+function flowAngle(world, c, r) {
+  // The bottom row always drains down into the towns below the grid.
+  if (r === GRID.rows - 1) return Math.PI / 2;
+  const down = cellAt(world, c, r + 1);
+  const right = cellAt(world, c + 1, r);
+  const left = cellAt(world, c - 1, r);
+  const up = cellAt(world, c, r - 1);
+  if (down && (down.water > 0.3 || isWaterTile(down))) return Math.PI / 2;
+  if (right && (right.water > 0.3 || isWaterTile(right))) return 0;
+  if (left && (left.water > 0.3 || isWaterTile(left))) return Math.PI;
+  if (up && up.water > 0.3) return -Math.PI / 2;
+  return Math.PI / 2;
+}
 function drawTile(ctx, world, c, r) {
   const cell = world.grid[r][c];
   const x = GRID.x + c * (GRID.cell + GRID.gap);
@@ -63,33 +79,76 @@ function drawTile(ctx, world, c, r) {
   ctx.fillStyle = cell.buried ? '#4a3b2e' : valley.tint;
   roundRect(ctx, x, y, GRID.cell, GRID.cell, 8);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(244,234,216,0.18)';
+  if ((c + r) % 2 === 0) {
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    roundRect(ctx, x, y, GRID.cell, GRID.cell, 8);
+    ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(244,234,216,0.32)';
+  ctx.lineWidth = 1;
   ctx.stroke();
   if (cell.kind === 'rock') {
-    ctx.fillStyle = '#8d97a8';
-    ctx.beginPath(); ctx.moveTo(x + 14, y + 56); ctx.lineTo(x + 36, y + 14); ctx.lineTo(x + 58, y + 56); ctx.closePath(); ctx.fill();
-    text(ctx, 'ROCK', x + 36, y + 64, 9, DIM, 'center', 800);
+    ctx.fillStyle = '#aab4c4';
+    ctx.beginPath(); ctx.moveTo(x + 14, y + 50); ctx.lineTo(x + 32, y + 12); ctx.lineTo(x + 50, y + 50); ctx.closePath(); ctx.fill();
+    text(ctx, 'ROCK', x + 32, y + 58, 9, DIM, 'center', 800);
   }
   if (cell.kind === 'canal' || cell.kind === 'pump' || cell.kind === 'tower' || cell.kind === 'sluice' || cell.kind === 'spillway') {
-    ctx.fillStyle = '#123a4a';
-    roundRect(ctx, x + 6, y + 6, GRID.cell - 12, GRID.cell - 12, 6); ctx.fill();
+    if (cell.water > 0.3) {
+      // Wet and connected: glowing water, not a flat block.
+      ctx.save();
+      ctx.shadowColor = WATER;
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = WATER;
+      roundRect(ctx, x + 6, y + 6, GRID.cell - 12, GRID.cell - 12, 6); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = WATER;
+      roundRect(ctx, x + 6, y + 6, GRID.cell - 12, GRID.cell - 12, 6); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillRect(x + 12, y + 12, GRID.cell - 24, 4);
+      // Flow chevrons: two arrowheads marching along the flow direction,
+      // offset by time and cell so a still frame still reads as motion.
+      const ang = flowAngle(world, c, r);
+      const dx = Math.cos(ang); const dy = Math.sin(ang);
+      const px = -dy; const py = dx;
+      const cx = x + GRID.cell / 2; const cy = y + GRID.cell / 2;
+      const march = (world.time * 22 + (c * 5 + r * 11)) % 14;
+      ctx.strokeStyle = WATER_BRIGHT;
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      for (let k = 0; k < 2; k += 1) {
+        const s = -10 + k * 14 + march - 7;
+        const mx = cx + dx * s; const my = cy + dy * s;
+        ctx.beginPath();
+        ctx.moveTo(mx + dx * 6, my + dy * 6);
+        ctx.lineTo(mx - dx * 4 + px * 5, my - dy * 4 + py * 5);
+        ctx.moveTo(mx + dx * 6, my + dy * 6);
+        ctx.lineTo(mx - dx * 4 - px * 5, my - dy * 4 - py * 5);
+        ctx.stroke();
+      }
+    } else {
+      // Dry and unconnected: dark empty channel with a dashed guide line,
+      // clearly different from a tile that already carries water.
+      ctx.fillStyle = '#0b2531';
+      roundRect(ctx, x + 6, y + 6, GRID.cell - 12, GRID.cell - 12, 6); ctx.fill();
+      ctx.strokeStyle = 'rgba(126,240,212,0.45)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 5]);
+      ctx.beginPath();
+      ctx.moveTo(x + 12, y + GRID.cell / 2); ctx.lineTo(x + GRID.cell - 12, y + GRID.cell / 2);
+      ctx.moveTo(x + GRID.cell / 2, y + 12); ctx.lineTo(x + GRID.cell / 2, y + GRID.cell - 12);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
   if (cell.blocked) {
     ctx.fillStyle = '#8d6b4a';
     ctx.fillRect(x + 10, y + 26, GRID.cell - 20, 20);
-    text(ctx, 'DEBRIS', x + 36, y + 36, 10, '#fff', 'center', 900);
-  }
-  if (cell.water > 0.3) {
-    const wob = Math.sin(world.time * 5 + c + r) * 3;
-    ctx.fillStyle = WATER;
-    roundRect(ctx, x + 8, y + 8 + wob * 0.3, GRID.cell - 16, GRID.cell - 16, 8); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillRect(x + 14, y + 16, GRID.cell - 28, 4);
+    text(ctx, 'DEBRIS', x + 32, y + 36, 10, '#fff', 'center', 900);
   }
   const label = { pump: 'PUMP', tower: 'TOWER', sluice: 'SLUICE', spillway: 'SPILL', levee: 'LEVEE', canal: '' }[cell.kind];
   if (label) text(ctx, label, x + 32, y + 32, 11, cell.water > 0.3 ? '#0f2f3a' : INK, 'center', 900);
   if (cell.kind === 'levee') {
-    ctx.fillStyle = '#c98f4a';
+    ctx.fillStyle = '#d9a45a';
     ctx.fillRect(x + 6, y + 18, GRID.cell - 12, 34);
     ctx.fillStyle = '#8a5a22';
     for (let i = 0; i < 3; i += 1) ctx.fillRect(x + 12 + i * 18, y + 18, 5, 34);
@@ -106,8 +165,73 @@ function drawTowns(ctx, world) {
     text(ctx, 'TOWN — feed me', x, y + 12, 9, '#3a2410', 'center', 700);
   }
 }
+// The Delugewyrm itself, coiled in the right margin during the boss flood:
+// three dark-outlined coils, a horned head with a glowing eye, and fins.
+// Its colours change with the phase — teal, then amber, then crimson.
+const WYRM_PHASES = [
+  { body: '#35d0c5', belly: '#a5fff2', eye: '#ffffff', fin: '#1b7f8f', horns: 1 },
+  { body: '#ffb454', belly: '#ffe1a8', eye: '#ffffff', fin: '#ff6b6b', horns: 2 },
+  { body: '#ff5a5a', belly: '#ffc2c2', eye: '#ffe600', fin: '#8f1d1d', horns: 3 },
+];
+function drawWyrm(ctx, world) {
+  if (!currentWave(world).boss && world.waveIndex < 6) return;
+  const p = WYRM_PHASES[world.bossPhase] || WYRM_PHASES[0];
+  const cx = 1140;
+  const coil = (y, rx, ry) => {
+    ctx.strokeStyle = '#0f2f3a';
+    ctx.lineWidth = 28;
+    ctx.beginPath(); ctx.ellipse(cx, y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = p.body;
+    ctx.lineWidth = 20;
+    ctx.beginPath(); ctx.ellipse(cx, y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = p.belly;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(cx, y, rx - 12, ry - 8, 0, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+  };
+  coil(240, 76, 32);
+  coil(340, 86, 34);
+  coil(440, 72, 30);
+  // Dorsal fins along the coils.
+  ctx.fillStyle = p.fin;
+  for (const [fx, fy] of [[1072, 214], [1208, 214], [1062, 314], [1218, 314], [1080, 416], [1200, 416]]) {
+    ctx.beginPath(); ctx.moveTo(fx - 8, fy); ctx.lineTo(fx, fy - 16); ctx.lineTo(fx + 8, fy); ctx.closePath(); ctx.fill();
+  }
+  // Head, rising above the top coil, snout pointing at the towns.
+  const hy = 138;
+  ctx.fillStyle = '#0f2f3a';
+  ctx.beginPath(); ctx.ellipse(cx, hy, 50, 34, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = p.body;
+  ctx.beginPath(); ctx.ellipse(cx, hy, 44, 28, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = p.body;
+  ctx.beginPath(); ctx.ellipse(cx - 44, hy + 6, 26, 17, 0, 0, Math.PI * 2); ctx.fill();
+  // Horns: more of them every phase.
+  ctx.fillStyle = p.fin;
+  const hornCount = p.horns + 1;
+  for (let i = 0; i < hornCount; i += 1) {
+    const hx = cx - 18 + i * 20;
+    ctx.beginPath(); ctx.moveTo(hx - 8, hy - 22); ctx.lineTo(hx, hy - 44 - i * 4); ctx.lineTo(hx + 8, hy - 22); ctx.closePath(); ctx.fill();
+  }
+  // Glowing eye + teeth + roar lines.
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(cx + 12, hy - 8, 8, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = p.eye;
+  ctx.beginPath(); ctx.arc(cx + 14, hy - 8, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 3; i += 1) {
+    ctx.beginPath(); ctx.moveTo(cx - 62 + i * 10, hy + 16); ctx.lineTo(cx - 57 + i * 10, hy + 24); ctx.lineTo(cx - 52 + i * 10, hy + 16); ctx.closePath(); ctx.fill();
+  }
+  ctx.strokeStyle = p.belly;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i += 1) {
+    ctx.beginPath(); ctx.moveTo(cx - 78, hy - 6 + i * 10); ctx.lineTo(cx - 94, hy - 10 + i * 10); ctx.stroke();
+  }
+  text(ctx, 'THE DELUGEWYRM', cx, 500, 13, p.body, 'center', 900);
+  text(ctx, BOSS.phases[world.bossPhase], cx, 520, 11, DIM, 'center', 800);
+}
 function drawBoss(ctx, world) {
   if (!currentWave(world).boss && world.waveIndex < 6) return;
+  const p = WYRM_PHASES[world.bossPhase] || WYRM_PHASES[0];
   // Boss band below the towns: name + HP bar on top, the serpent below.
   text(ctx, `${BOSS.name}  —  ${BOSS.phases[world.bossPhase]}`, 640, 586, 15, RED, 'center', 900);
   ctx.fillStyle = '#3a1020';
@@ -119,15 +243,15 @@ function drawBoss(ctx, world) {
   ctx.fillStyle = '#123a4a';
   roundRect(ctx, 300, y - 12, 680, 30, 10); ctx.fill();
   ctx.strokeStyle = WATER; ctx.lineWidth = 1; ctx.stroke();
-  // The Delugewyrm: a coiling serpent in the floodwater.
-  ctx.strokeStyle = '#35d0c5'; ctx.lineWidth = 12; ctx.lineCap = 'round';
+  // The Delugewyrm: a coiling serpent in the floodwater, coloured by phase.
+  ctx.strokeStyle = p.body; ctx.lineWidth = 12; ctx.lineCap = 'round';
   ctx.beginPath();
   for (let x = 330; x <= 950; x += 10) {
     const yy = y + Math.sin((x + world.time * 60) / 90) * 6;
     if (x === 330) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
   }
   ctx.stroke();
-  ctx.fillStyle = '#ff6b6b';
+  ctx.fillStyle = p.fin;
   ctx.beginPath(); ctx.arc(950, y, 12, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.arc(955, y - 4, 3, 0, Math.PI * 2); ctx.fill();
@@ -182,20 +306,39 @@ function drawBuildBar(ctx, world) {
 function drawFloaters(ctx, world) {
   for (const f of world.floaters) {
     ctx.globalAlpha = Math.min(1, f.life);
-    text(ctx, f.text, f.x, f.y - (1.2 - f.life) * 30, 15, f.color, 'center', 900);
+    const fy = f.y - (1.2 - f.life) * 30;
+    ctx.font = '900 15px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = 'rgba(10,14,30,0.9)';
+    ctx.lineWidth = 4;
+    ctx.strokeText(f.text, f.x, fy);
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, f.x, fy);
   }
   ctx.globalAlpha = 1;
 }
+function wrapLogLine(s, maxChars) {
+  const words = (s || '').split(' ');
+  const lines = [''];
+  for (const w of words) {
+    const cur = lines[lines.length - 1];
+    if (cur && cur.length + 1 + w.length > maxChars) lines.push(w);
+    else lines[lines.length - 1] = cur ? `${cur} ${w}` : w;
+  }
+  return lines;
+}
 function drawLog(ctx, world) {
-  const trunc = (s) => {
-    const t = (s || '');
-    if (t.length <= 36) return t;
-    const cut = t.slice(0, 36);
-    const sp = cut.lastIndexOf(' ');
-    return (sp > 20 ? cut.slice(0, sp) : cut) + '…';
-  };
-  text(ctx, trunc(world.log[0]), 20, 120, 13, '#e8d9a0', 'left', 700);
-  if (world.log[1]) text(ctx, trunc(world.log[1]), 20, 140, 11, DIM, 'left', 700);
+  // Wrapped, never truncated: the whole message fits in the left panel.
+  const lines = [...wrapLogLine(world.log[0], 30), ...wrapLogLine(world.log[1], 30)].filter(Boolean);
+  const h = lines.length * 16 + 14;
+  ctx.fillStyle = 'rgba(10,14,30,0.72)';
+  roundRect(ctx, 12, 106, 272, h, 10); ctx.fill();
+  ctx.strokeStyle = 'rgba(244,234,216,0.18)';
+  ctx.stroke();
+  lines.forEach((line, i) => {
+    text(ctx, line, 22, 118 + i * 16, i === 0 ? 12 : 11, i === 0 ? '#e8d9a0' : DIM, 'left', 700);
+  });
 }
 function drawTitle(ctx, world) {
   sky(ctx, world);
@@ -257,6 +400,7 @@ export function drawGame(ctx, world, screenOverride) {
   drawSprings(ctx, world);
   for (let r = 0; r < GRID.rows; r += 1) for (let c = 0; c < GRID.cols; c += 1) drawTile(ctx, world, c, r);
   drawTowns(ctx, world);
+  drawWyrm(ctx, world);
   drawBoss(ctx, world);
   drawFloaters(ctx, world);
   for (const p of world.particles) {

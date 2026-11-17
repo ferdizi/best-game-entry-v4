@@ -3,9 +3,9 @@
 export const VIEW = { width: 1280, height: 720 };
 export const GRID = { cols: 9, rows: 6, x: 300, y: 120, cell: 64, gap: 4 };
 export const VALLEYS = [
-  { name: 'REED HOLLOW', tint: '#2e6b4f', towns: ['Reed Hollow'] },
-  { name: 'MILLSTONE BASIN', tint: '#7a5a2e', towns: ['Millstone'] },
-  { name: 'SALTMARSH DELTA', tint: '#2e5d6b', towns: ['Saltmarsh'] },
+  { name: 'REED HOLLOW', tint: '#2f8f5f', towns: ['Reed Hollow'] },
+  { name: 'MILLSTONE BASIN', tint: '#a67c2e', towns: ['Millstone'] },
+  { name: 'SALTMARSH DELTA', tint: '#2f8a9a', towns: ['Saltmarsh'] },
 ];
 export const TOWNS = [
   { name: 'Reed Hollow', col: 1, need: 2 },

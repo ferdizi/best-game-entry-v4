@@ -76,7 +76,11 @@ export function isWaterTile(cell) {
   return cell && ['canal', 'pump', 'tower', 'sluice', 'spillway'].includes(cell.kind);
 }
 export function addFloater(world, col, row, text, color) {
-  world.floaters.push({ x: GRID.x + col * (GRID.cell + GRID.gap) + 36, y: GRID.y + row * (GRID.cell + GRID.gap) + 20, text, color: color || '#ffd166', life: 1.2 });
+  // Stagger simultaneous +N popups across three lanes so they never stack.
+  const lane = world.floaters.length % 3;
+  const baseX = GRID.x + col * (GRID.cell + GRID.gap) + 36;
+  const baseY = GRID.y + row * (GRID.cell + GRID.gap) + 20;
+  world.floaters.push({ x: baseX + (lane - 1) * 52, y: baseY - lane * 22, text, color: color || '#ffd166', life: 1.2 });
 }
 export function addScore(world, points, col, row) {
   const gained = points * world.combo;
